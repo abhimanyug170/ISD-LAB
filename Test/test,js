@@ -1,0 +1,89 @@
+var Management = artifacts.require("./TeamManagement1.sol");
+
+contract("Management", function(accounts) {
+  var managementInstance;
+
+  it("initializes with zero candidates", function() {
+    return Management.deployed().then(function(instance) {
+      return instance.candidatesCount();
+    }).then(function(count) {
+      assert.equal(count, 0);
+    });
+  });
+
+  it("it initializes the candidates with the correct values", function() {
+    return Management.deployed().then(function(instance) {
+      managementInstance = instance;
+      return managementInstance.candidates(1);
+    }).then(function(candidate) {
+      assert.equal(candidate[0], 1, "contains the correct id");
+      assert.equal(candidate[1], "Candidate 1", "contains the correct name");
+      assert.equal(candidate[2], 0, "contains the correct count");
+      return managementInstance.candidates(2);
+    }).then(function(candidate) {
+      assert.equal(candidate[0], 2, "contains the correct id");
+      assert.equal(candidate[1], "Candidate 2", "contains the correct name");
+      assert.equal(candidate[2], 0, "contains the correct count");
+    });
+  });
+
+  it("allows a assigner to assign a task", function() {
+    return Management.deployed().then(function(instance) {
+      managementInstance = instance;
+      candidateId = 1;
+      return managementInstance.assign(candidateId, { from: accounts[0] });
+    }).then(function(receipt) {
+      assert.equal(receipt.logs.length, 1, "an event was triggered");
+      assert.equal(receipt.logs[0].event, "assignedEvent", "the event type is correct");
+      assert.equal(receipt.logs[0].args._candidateId.toNumber(), candidateId, "the candidate id is correct");
+      return managementInstance.assignees(accounts[0]);
+    }).then(function(assignd) {
+      assert(assignd, "the assignee was marked as assigned");
+      return managementInstance.candidates(candidateId);
+    }).then(function(candidate) {
+      var assignCount = candidate[2];
+      assert.equal(assignCount, 1, "increments the candidate's assign count");
+    })
+  });
+
+  it("throws an exception for invalid candiates", function() {
+    return Management.deployed().then(function(instance) {
+      managementInstance = instance;
+      return managementInstance.assign(99, { from: accounts[1] })
+    }).then(assert.fail).catch(function(error) {
+      assert(error.message.indexOf('revert') >= 0, "error message must contain revert");
+      return managementInstance.candidates(1);
+    }).then(function(candidate1) {
+      var assignCount = candidate1[2];
+      assert.equal(assignCount, 1, "candidate 1 did not receive any assigns");
+      return managementInstance.candidates(2);
+    }).then(function(candidate2) {
+      var assignCount = candidate2[2];
+      assert.equal(assignCount, 0, "candidate 2 did not receive any assigns");
+    });
+  });
+
+  it("throws an exception for double assigns", function() {
+    return Management.deployed().then(function(instance) {
+      managementInstance = instance;
+      candidateId = 2;
+      managementInstance.assign(candidateId, { from: accounts[1] });
+      return managementInstance.candidates(candidateId);
+    }).then(function(candidate) {
+      var assignCount = candidate[2];
+      assert.equal(assignCount, 1, "accepts first assign");
+      // Try to assign again
+      return managementInstance.assign(candidateId, { from: accounts[1] });
+    }).then(assert.fail).catch(function(error) {
+      assert(error.message.indexOf('revert') >= 0, "error message must contain revert");
+      return managementInstance.candidates(1);
+    }).then(function(candidate1) {
+      var assignCount = candidate1[2];
+      assert.equal(assignCount, 1, "candidate 1 did not receive any assigns");
+      return managementInstance.candidates(2);
+    }).then(function(candidate2) {
+      var assignCount = candidate2[2];
+      assert.equal(assignCount, 1, "candidate 2 did not receive any assigns");
+    });
+  });
+});
